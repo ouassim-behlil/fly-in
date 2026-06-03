@@ -1,0 +1,7 @@
+[project]
+name = "fly-in"
+version = "0.1.0"
+description = "drone routing system that navigates multiple autonomous drones from a central base to a target location through a dynamic network."
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = []
