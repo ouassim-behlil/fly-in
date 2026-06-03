@@ -1,12 +1,5 @@
 from dataclasses import dataclass
-from enum import Enum
-
-
-class ZoneType(str, Enum):
-    NORMAL = "normal"
-    BLOCKED = "blocked"
-    RESTRICTED = "restricted"
-    PRIORITY = "priority"
+from .metadata import Metadata
 
 
 @dataclass
@@ -14,6 +7,4 @@ class Zone:
     name: str
     x: int
     y: int
-    zone_type: "ZoneType" = ZoneType.NORMAL
-    color: str | None = None
-    max_drones: int = 1
+    metadata: "Metadata"
