@@ -1,1 +1,15 @@
-from .model import *
+from .parser import MapParser
+from .utils import ParseError
+from .model import (
+	Connection,
+	Drone,
+	Zone
+)
+
+__all__ = [
+	'MapParser',
+	'ParseError',
+	'Connection',
+	'Drone',
+	'Zone'
+]
