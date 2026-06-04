@@ -79,10 +79,10 @@ class MapParser:
         
         # Parse name, coords and metadata
         if '[' in line:
-            if len(line.split()) != 5:
+            if len(line.split()) < 5:
                 raise ParseError(
                     line_number,
-                    f"Invalid number of parameters expected 5 but got {len(line.split())}"
+                    f"Invalid number of parameters expected minimum 5 but got {len(line.split())}"
                 )
             try:
                 _, name, x, y, _ = line.split(maxsplit=4)
@@ -206,7 +206,7 @@ class MapParser:
 
     def print_end_zone(self) -> None:
         print()
-        print("Start Zone:")
+        print("End Zone:")
         print("name:", self.end_zone.name)
         print("x:", self.end_zone.x)
         print("y:", self.end_zone.y)
@@ -215,9 +215,9 @@ class MapParser:
         print("max drones:", self.end_zone.metadata.max_drones)
 
     def print_hub_zones(self) -> None:
+        print("Hub Zones:")
         for zone in self.zones.values():
             print()
-            print("Hub Zone:")
             print("name:", zone.name)
             print("x:", zone.x)
             print("y:", zone.y)
