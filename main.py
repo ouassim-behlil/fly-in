@@ -1,7 +1,6 @@
 from pathlib import Path
 
-from flyin.parser.map_parser import MapParser
-from flyin.utils.errors import ParseError
+from flyin import MapParser, ParseError
 
 
 def main() -> None:
@@ -9,10 +8,7 @@ def main() -> None:
     try:
         parser = MapParser(path)
         parser.parse()
-        print("Map parsed successfully.")
-        parser.print_start_zone()
-        parser.print_end_zone()
-        parser.print_hub_zones()
+        parser.print_connections()
     except ParseError as e:
         print(f"Error: {e}")
 
