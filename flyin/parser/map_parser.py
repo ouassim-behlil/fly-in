@@ -1,12 +1,9 @@
-from __future__ import annotations
 
 from pathlib import Path
 from typing import Dict, List, Tuple
 
-from flyin import Zone
-from flyin import Metadata, ZoneType
-from flyin import Connection
-from flyin.utils.errors import ParseError
+from flyin import Zone, Metadata, ZoneType, Connection
+from flyin.utils import ParseError
 
 
 class MapParser:
@@ -59,6 +56,7 @@ class MapParser:
             raise ParseError(line_number, "There must be exactly one start_hub zone!")
 
         self.start_zone = self._parse_zone(line, line_number)
+        self.zones[self.start_zone.name] = self.start_zone
         
 
     def _parse_end_hub(self, line: str, line_number: int) -> None:
@@ -66,14 +64,69 @@ class MapParser:
             raise ParseError(line_number, "There must be exactly one end_hub zone!")
 
         self.end_zone = self._parse_zone(line, line_number)
+        self.zones[self.end_zone.name] = self.end_zone
 
     def _parse_hub(self, line: str, line_number: int) -> None:
         zone = self._parse_zone(line, line_number)
         self.zones[zone.name] = zone
 
     def _parse_connection(self, line: str, line_number: int) -> None:
-        # TODO: parse connection + metadata
-        pass
+        connection = Connection()
+        # case when metadata exist
+        if '[' in line:
+            start, end = line.index('['), line.index(']')
+            if start == -1 or end == -1:
+                raise ParseError(
+                    line_number,
+                    "Invalid metadata! use brackets."
+                )
+            meta_str = line[start + 1: end]
+            try:
+                key, value = meta_str.strip().split('=', 1)
+            except ValueError:
+                raise ParseError(
+                    line_number,
+                    f"Invalid metadata! expected 'key=value' but got {meta_str}"
+                )
+            if key != 'max_link_capacity':
+                raise ParseError(
+                    line_number,
+                    f"Invalid key in connection metadata: '{key}'!"
+                )
+            try:
+                connection.max_link_capacity = int(value)
+            except ValueError:
+                raise ParseError(
+                    line_number,
+                    f"max_link_capacity must be an integer but got: '{value.strip()}'!"
+                )
+            line = line[:start]
+        try:
+            zone_1, zone_2 = line.split(':', 1)[1].strip().split('-', 1)
+        except ValueError:
+            raise ParseError(
+                line_number,
+                f"Expected 'connection: <name1>-<name2' but got: '{line}'"
+            )
+        zone_1, zone_2 = zone_1.strip(), zone_2.strip()
+        if any([forbidden in zone_1 or forbidden in zone_2 for forbidden in ['-']]):
+            raise ParseError(
+                line_number,
+                "The connection syntax forbids dashes in zone names!"
+            )
+        if zone_1 not in self.zones:
+            raise ParseError(line_number, f"{zone_1} not int zones!")
+        if zone_2 not in self.zones:
+            raise ParseError(line_number, f"{zone_2} not int zones!")
+        for con in self.connections:
+            if (con.zone1 == zone_1 and con.zone2 == zone_2) or (con.zone1 == zone_2 and con.zone2 == zone_1):
+                raise ParseError(
+                    line_number,
+                    "Connection already exist!"
+                )
+        connection.zone1 = zone_1
+        connection.zone2 = zone_2
+        self.connections.append(connection)
 
     def _parse_zone(self, line: str, line_number: int) -> "Zone":
         
@@ -224,3 +277,11 @@ class MapParser:
             print("zone type:", zone.metadata.zone)
             print("color:", zone.metadata.color)
             print("max drones:", zone.metadata.max_drones)
+
+    def print_connections(self):
+        for con in self.connections:
+            print()
+            print("Zone 1:", con.zone1)
+            print("Zone 2:", con.zone2)
+            print("max_link_capacity:", con.max_link_capacity)
+            print()
