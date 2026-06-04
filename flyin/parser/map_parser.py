@@ -2,7 +2,7 @@
 from pathlib import Path
 from typing import Dict, List, Tuple
 
-from flyin import Zone, Metadata, ZoneType, Connection
+from flyin.model import Zone, Metadata, ZoneType, Connection
 from flyin.utils import ParseError
 
 
