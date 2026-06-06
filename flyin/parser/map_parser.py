@@ -51,7 +51,7 @@ class MapParser:
                 )
     
     def _parse_start_hub(self, line: str, line_number: int) -> None:
-        # TODO: parse name, coords, metadata
+
         if self.start_zone:
             raise ParseError(line_number, "There must be exactly one start_hub zone!")
 
@@ -203,13 +203,14 @@ class MapParser:
 
             if key == 'zone':
                 if value == 'normal':
-                    metadata.zone = ZoneType.NORMAL
+                    metadata.zone_type = ZoneType.NORMAL
                 elif value == 'blocked':
-                    metadata.zone = ZoneType.BLOCKED
+                    metadata.zone_type = ZoneType.BLOCKED
                 elif value == 'restricted':
-                    metadata.zone = ZoneType.RESTRICTED
+                    metadata.zone_type = ZoneType.RESTRICTED
+                    metadata.cost = 2
                 elif value == 'priority':
-                    metadata.zone = ZoneType.PRIORITY
+                    metadata.zone_type = ZoneType.PRIORITY
                 else:
                     raise ParseError(
                         line_number,
@@ -244,8 +245,8 @@ class MapParser:
             raise ParseError(0, "Missing nb_drones")
         if self.start_zone is None:
             raise ParseError(0, "Missing start_hub")
-        # if self.end_zone is None:
-        #     raise ParseError(0, "Missing end_hub")
+        if self.end_zone is None:
+            raise ParseError(0, "Missing end_hub")
 
     def print_start_zone(self) -> None:
         print()
@@ -253,7 +254,7 @@ class MapParser:
         print("name:", self.start_zone.name)
         print("x:", self.start_zone.x)
         print("y:", self.start_zone.y)
-        print("zone type:", self.start_zone.metadata.zone)
+        print("zone type:", self.start_zone.metadata.zone_type)
         print("color:", self.start_zone.metadata.color)
         print("max drones:", self.start_zone.metadata.max_drones)
 
@@ -263,7 +264,7 @@ class MapParser:
         print("name:", self.end_zone.name)
         print("x:", self.end_zone.x)
         print("y:", self.end_zone.y)
-        print("zone type:", self.end_zone.metadata.zone)
+        print("zone type:", self.end_zone.metadata.zone_type)
         print("color:", self.end_zone.metadata.color)
         print("max drones:", self.end_zone.metadata.max_drones)
 
@@ -274,7 +275,7 @@ class MapParser:
             print("name:", zone.name)
             print("x:", zone.x)
             print("y:", zone.y)
-            print("zone type:", zone.metadata.zone)
+            print("zone type:", zone.metadata.zone_type)
             print("color:", zone.metadata.color)
             print("max drones:", zone.metadata.max_drones)
 
