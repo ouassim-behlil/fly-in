@@ -3,7 +3,8 @@ from .utils import ParseError
 from .model import (
 	Connection,
 	Drone,
-	Zone
+	Zone,
+	ZoneType
 )
 
 __all__ = [
@@ -11,5 +12,6 @@ __all__ = [
 	'ParseError',
 	'Connection',
 	'Drone',
-	'Zone'
+	'Zone',
+	'ZoneType'
 ]
