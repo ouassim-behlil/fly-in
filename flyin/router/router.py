@@ -28,34 +28,59 @@ class MultiAgentRouter:
         adjacent_zones = dict()
 
         for conn in self.connections:
-            if zone == conn.zone1 or zone == conn.zone2:
 
+            if zone == conn.zone1:
+                adj = self.zones[conn.zone2]
+            elif zone == conn.zone2:
                 adj = self.zones[conn.zone1]
-                if zone == conn.zone1:
-                    adj = self.zones[conn.zone2]
 
-                if adj.metadata.zone_type == ZoneType.BLOCKED:
-                    continue
+            else:
+                continue
 
-                adjacent_zones[adj.name] = self.zones[conn.zone2].metadata.cost
+            adjacent_zones[adj.name] = adj.metadata.cost
 
         return adjacent_zones
 
-    def _distance_to_end_hub(self, from_zone: Zone) -> int:
+    def _shortest_path(self, from_zone: Zone) -> List[str]:
+
         pq = list()
         dist = dict()
+        parent = dict()
 
-        heapq.heappush(pq, (0, self.end_zone.name))
-        dist[self.end_zone.name] = 0
+        parent[from_zone.name] = None
+
+        heapq.heappush(pq, (0, from_zone.name))
+        dist[from_zone.name] = 0
         while pq:
             d, u = heapq.heappop(pq)
+
+            if u == self.end_zone.name:
+
+                path = list()
+
+                while u is not None:
+                    path.append(u)
+                    u = parent[u]
+
+                return path[::-1]
 
             if d > dist.get(u, sys.maxsize):
                 continue
 
             for v, w in self._adja(u).items():
-                if dist.get(u, sys.maxsize) + w < dist.get(v, sys.maxsize):
-                    dist[v] = dist.get(u, sys.maxsize) + w
-                    heapq.heappush(pq, (dist[v], v))
 
-        return dist.get(from_zone.name, sys.maxsize)
+                new_dist = dist[u] + w
+                old_dist = dist.get(v, sys.maxsize)
+                if new_dist < old_dist:
+                    dist[v] = new_dist
+                    heapq.heappush(pq, (new_dist, v))
+                    parent[v] = u
+
+                elif (
+                    new_dist == old_dist
+                    and self.zones[u].metadata.zone_type == ZoneType.PRIORITY
+                ):
+                    parent[v] = u
+
+        return list()
+

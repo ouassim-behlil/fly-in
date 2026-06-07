@@ -24,7 +24,7 @@ def main() -> None:
         "Distance from",
         zone.name,
         f"to {parser.end_zone.name} is:",
-        router._distance_to_end_hub(parser.start_zone)
+        router._shortest_path(parser.start_zone)
     )
 
 
