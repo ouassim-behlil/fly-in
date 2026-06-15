@@ -1,6 +1,6 @@
 
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Set
 
 from flyin.model import Zone, Metadata, ZoneType, Connection
 from flyin.utils import ParseError
@@ -11,88 +11,123 @@ class MapParser:
         self.path = path
         self.nb_drones: int | None = None
         self.zones: Dict[str, Zone] = dict()
+        self.unique_connections: Set[Tuple[str, str]] = set()
         self.connections: List[Connection] = list()
         self.start_zone: str | None = None
         self.end_zone: str | None = None
 
     def parse(self) -> None:
-        with self.path.open("r", encoding="utf-8") as f:
+
+        handlers = {
+                    "nb_drones": self._parse_nb_drones,
+                    "start_hub": self._parse_start_hub,
+                    "end_hub": self._parse_end_hub,
+                    "hub": self._parse_hub,
+                    "connection": self._parse_connection,
+                }
+
+
+        with self.path.open("r", encoding="utf-8", buffering=1 << 16) as f:
+
             for line_number, raw in enumerate(f, start=1):
+
                 line = raw.strip()
-                if not line or line.startswith("#"):
+                
+                rest, sep, comment = line.partition('#')
+
+                if sep:
+                    line = rest.strip()
+                
+                if len(line) == 0:
                     continue
-                # TODO: dispatch to specific handlers
-                if line.startswith("nb_drones:"):
-                    self._parse_nb_drones(line, line_number)
-                elif line.startswith("start_hub:"):
-                    self._parse_start_hub(line, line_number)
-                elif line.startswith("end_hub:"):
-                    self._parse_end_hub(line, line_number)
-                elif line.startswith("hub:"):
-                    self._parse_hub(line, line_number)
-                elif line.startswith("connection:"):
-                    self._parse_connection(line, line_number)
-                else:
+                
+
+                key, sep, value = line.partition(':')
+
+                if not sep:
+                    raise ParseError(line_number, f"Line should start with: '<key>:' but got {line}")
+
+                key = key.strip()
+                value = value.strip()
+
+                handler = handlers.get(key)
+
+                if not handler:
                     raise ParseError(line_number, f"Unknown directive: {line}")
+                
+                handler(value, line_number)
 
         self._validate_final_state()
 
-    def _parse_nb_drones(self, line: str, line_number: int) -> None:
+    def _parse_nb_drones(self, value: str, line_number: int) -> None:
+
+        if self.nb_drones:
+            raise ParseError(line_number, "nb_drones already declared")
+
         try:
-            _, value = line.split(":", 1)
-            self.nb_drones = int(value.strip())
-        except ValueError:
-            raise ParseError(line_number, f"nb_drones must be a positive number! we got: '{value.strip()}'")
+            self.nb_drones = int(value)
+        except (ValueError, ParseError):
+            raise ParseError(line_number, f"nb_drones must be a positive number! we got: '{value}'")
 
         if self.nb_drones <= 0:
-                raise ParseError(
-                    line_number,
-                    f"nb_drones must be a positive number! we got {self.nb_drones}"
-                )
+            raise ParseError(line_number, f"nb_drones must be a positive number! we got: '{value}'")
     
-    def _parse_start_hub(self, line: str, line_number: int) -> None:
+    def _parse_start_hub(self, value: str, line_number: int) -> None:
 
         if self.start_zone:
             raise ParseError(line_number, "There must be exactly one start_hub zone!")
 
-        self.start_zone = self._parse_zone(line, line_number)
+        self.start_zone = self._parse_zone(value, line_number)
         self.zones[self.start_zone.name] = self.start_zone
         
 
-    def _parse_end_hub(self, line: str, line_number: int) -> None:
+    def _parse_end_hub(self, value: str, line_number: int) -> None:
+
         if self.end_zone:
             raise ParseError(line_number, "There must be exactly one end_hub zone!")
 
-        self.end_zone = self._parse_zone(line, line_number)
+        self.end_zone = self._parse_zone(value, line_number)
         self.zones[self.end_zone.name] = self.end_zone
 
-    def _parse_hub(self, line: str, line_number: int) -> None:
-        zone = self._parse_zone(line, line_number)
+    def _parse_hub(self, value: str, line_number: int) -> None:
+
+        zone = self._parse_zone(value, line_number)
         self.zones[zone.name] = zone
 
     def _parse_connection(self, line: str, line_number: int) -> None:
+
         connection = Connection()
+
         # case when metadata exist
-        if '[' in line:
-            start, end = line.index('['), line.index(']')
-            if start == -1 or end == -1:
+        start, end = line.find('['), line.find(']')
+
+        if start != -1:
+
+            if end == -1:
                 raise ParseError(
                     line_number,
-                    "Invalid metadata! use brackets."
+                    "Invalid metadata! Bracket not closed"
                 )
-            meta_str = line[start + 1: end]
-            try:
-                key, value = meta_str.strip().split('=', 1)
-            except ValueError:
+
+            meta_str = line[start + 1: end].strip()
+
+            key, sep, value = meta_str.partition('=')
+
+            key = key.strip()
+            value = value.strip()
+
+            if not sep:
                 raise ParseError(
                     line_number,
                     f"Invalid metadata! expected 'key=value' but got {meta_str}"
                 )
+
             if key != 'max_link_capacity':
                 raise ParseError(
                     line_number,
                     f"Invalid key in connection metadata: '{key}'!"
                 )
+
             try:
                 connection.max_link_capacity = int(value)
             except ValueError:
@@ -100,81 +135,96 @@ class MapParser:
                     line_number,
                     f"max_link_capacity must be an integer but got: '{value.strip()}'!"
                 )
+
             line = line[:start]
-        try:
-            zone_1, zone_2 = line.split(':', 1)[1].strip().split('-', 1)
-        except ValueError:
+
+        zone1, sep, zone2 = line.partition('-')
+
+        if not sep:
             raise ParseError(
                 line_number,
-                f"Expected 'connection: <name1>-<name2' but got: '{line}'"
+                f"Expected 'connection: <name1>-<name2>' but got: '{line}'"
             )
-        zone_1, zone_2 = zone_1.strip(), zone_2.strip()
-        if any([forbidden in zone_1 or forbidden in zone_2 for forbidden in ['-']]):
+
+        zone1, zone2 = zone1.strip(), zone2.strip()
+
+        if '-' in zone1 or '-' in zone2:
+
             raise ParseError(
                 line_number,
                 "The connection syntax forbids dashes in zone names!"
             )
-        if zone_1 not in self.zones:
-            raise ParseError(line_number, f"{zone_1} not int zones!")
-        if zone_2 not in self.zones:
-            raise ParseError(line_number, f"{zone_2} not int zones!")
-        for con in self.connections:
-            if (con.zone1 == zone_1 and con.zone2 == zone_2) or (con.zone1 == zone_2 and con.zone2 == zone_1):
-                raise ParseError(
-                    line_number,
-                    "Connection already exist!"
-                )
-        connection.zone1 = zone_1
-        connection.zone2 = zone_2
+
+        if zone1 not in self.zones:
+
+            raise ParseError(line_number, f"{zone1} not in zones!")
+
+        if zone2 not in self.zones:
+
+            raise ParseError(line_number, f"{zone2} not in zones!")
+
+        if (zone1, zone2) in self.unique_connections or (zone2, zone1) in self.unique_connections:
+
+            raise ParseError(
+                line_number,
+                "Connection already exist!"
+            )
+        connection.zone1 = zone1
+        connection.zone2 = zone2
         self.connections.append(connection)
+
+        self.unique_connections.add((zone1, zone2))
 
     def _parse_zone(self, line: str, line_number: int) -> "Zone":
         
         # Parse name, coords and metadata
-        if '[' in line:
-            if len(line.split()) < 5:
-                raise ParseError(
-                    line_number,
-                    f"Invalid number of parameters expected minimum 5 but got {len(line.split())}"
-                )
-            try:
-                _, name, x, y, _ = line.split(maxsplit=4)
-            except ValueError:
-                raise ParseError(line_number, "Invalid zone!")
+        metadata = Metadata()
+
+        start = line.find('[')
+
+        if start != -1:
 
             metadata = self._parse_zone_metadata(line, line_number)
 
-        else:
-            if len(line.split()) != 4:
-                raise ParseError(
-                    line_number,
-                    f"Invalid number of parameters expected 4 but got {len(line.split())}"
-                )
-            metadata = Metadata()
-            try:
-                _, name, x, y = line.split(maxsplit=3)
-            except ValueError:
-                raise ParseError(line_number, "Invalid zone!")
+            line = line[:start].strip()
 
-        if any([restricted in name for restricted in ['-', ' ']]):
+        line_split = line.split()
+
+        if len(line_split) != 3:
+
+            raise ParseError(
+                line_number,
+                "Invalid number of zone parameters expected "
+                f"but got {len(line.split())}"
+            )
+
+        name, x, y = line_split
+
+        if '-' in name:
+
             raise ParseError(
                 line_number,
                 "Zone names can use any valid characters but dashes and spaces!"
                 )
 
         if name in self.zones:
+
             raise ParseError(
                 line_number,
                 "Each zone must have a unique name!"
             )
 
         try:
+
             x, y = int(x), int(y)
+
         except ValueError:
+
             raise ParseError(
                 line_number,
                 "Each zone must have valid integer coordinates!"
             )
+
         zone = Zone(
             name = name,
             x=x,
@@ -184,55 +234,72 @@ class MapParser:
         return zone
     
     def _parse_zone_metadata(self, line: str, line_number: int) -> "Metadata":
+
         start = line.find('[')
         end = line.find(']')
 
         if start == -1 or end == -1:
             raise ParseError(line_number, "Invalid metadata! use brackets.")
 
-        meta_str = line[start + 1: end]
+        meta_str = line[start + 1: end].strip()
+
         metadata = Metadata()
-        for element in  meta_str.strip().split():
-            try:
-                key, value = element.split(sep='=', maxsplit=1)
-            except ValueError:
+
+        zone_type_handler = {
+            'normal': ZoneType.NORMAL,
+            'blocked': ZoneType.BLOCKED,
+            'restricted': ZoneType.RESTRICTED,
+            'priority': ZoneType.PRIORITY
+        }
+
+        for element in  meta_str.split():
+
+            key, sep, value = element.partition('=')
+
+            if not sep:
                 raise ParseError(
                     line_number,
                     f"Invalid metadata! expected 'key=value' but got {element}"
                 )
 
             if key == 'zone':
-                if value == 'normal':
-                    metadata.zone_type = ZoneType.NORMAL
-                elif value == 'blocked':
-                    metadata.zone_type = ZoneType.BLOCKED
-                elif value == 'restricted':
-                    metadata.zone_type = ZoneType.RESTRICTED
-                    metadata.cost = 2
-                elif value == 'priority':
-                    metadata.zone_type = ZoneType.PRIORITY
-                else:
+                metadata.zone_type = zone_type_handler.get(value)
+
+                if not metadata.zone_type:
+
                     raise ParseError(
                         line_number,
                         f"Invalid zone type: {value}!"
                     )
+
+                if value == 'restricted':
+                    metadata.cost = 2
+                    
             elif key == 'color':
-                if len(value.split()) != 1:
+
+                if len(value) == 0:
+
                     raise ParseError(
                         line_number,
                         f"Color must be a single word but got: {value}"
                     )
+
                 metadata.color = value
             
             elif key == 'max_drones':
+
                 try:
+
                     metadata.max_drones = int(value)
+
                 except ValueError:
+
                     raise ParseError(
                         line_number,
                         f"max_drones must be an integer but got: {value}!"
                     )
             else:
+
                 raise ParseError(
                     line_number,
                     f"Invalid key in metadata: {key}!"
@@ -241,15 +308,21 @@ class MapParser:
         return metadata
 
     def _validate_final_state(self) -> None:
+
         if self.nb_drones is None:
+
             raise ParseError(0, "Missing nb_drones")
+
         if self.start_zone is None:
+
             raise ParseError(0, "Missing start_hub")
+
         if self.end_zone is None:
+
             raise ParseError(0, "Missing end_hub")
 
     def print_start_zone(self) -> None:
-        print()
+        print('-' * 100)
         print("Start Zone:")
         print("name:", self.start_zone.name)
         print("x:", self.start_zone.x)
@@ -259,7 +332,7 @@ class MapParser:
         print("max drones:", self.start_zone.metadata.max_drones)
 
     def print_end_zone(self) -> None:
-        print()
+        print('-' * 100)
         print("End Zone:")
         print("name:", self.end_zone.name)
         print("x:", self.end_zone.x)
@@ -269,7 +342,7 @@ class MapParser:
         print("max drones:", self.end_zone.metadata.max_drones)
 
     def print_hub_zones(self) -> None:
-        print("Hub Zones:")
+        print("Hub Zones:" + '-' * 50)
         for zone in self.zones.values():
             print()
             print("name:", zone.name)
@@ -280,6 +353,7 @@ class MapParser:
             print("max drones:", zone.metadata.max_drones)
 
     def print_connections(self):
+        print('-' * 100)
         for con in self.connections:
             print()
             print("Zone 1:", con.zone1)
