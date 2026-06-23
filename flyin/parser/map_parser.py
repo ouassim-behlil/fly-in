@@ -2,7 +2,7 @@
 from pathlib import Path
 from typing import Dict, List, Tuple, Set
 
-from flyin.model import Zone, Metadata, ZoneType, Connection
+from flyin.model import Zone, Metadata, ZoneType, Connection, Graph
 from flyin.utils import ParseError
 
 
@@ -59,6 +59,14 @@ class MapParser:
 
         self._validate_final_state()
 
+        return Graph(
+            self.nb_drones,
+            self.zones,
+            self.connections,
+            self.start_zone,
+            self.end_zone
+        )
+        
     def _parse_nb_drones(self, value: str, line_number: int) -> None:
 
         if self.nb_drones:
