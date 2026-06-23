@@ -2,6 +2,7 @@ from .connection import Connection
 from .drone import Drone
 from .metadata import ZoneType, Metadata
 from .zone import Zone
+from .graph import Graph
 
 __all__ = [
     'Connection',
@@ -9,4 +10,5 @@ __all__ = [
     'ZoneType',
     'Metadata',
     'Zone'
+    'Graph'
 ]
