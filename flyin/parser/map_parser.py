@@ -61,7 +61,7 @@ class MapParser:
 
         return Graph(
             self.nb_drones,
-            self.zones,
+            list(self.zones.values()),
             self.connections,
             self.start_zone,
             self.end_zone

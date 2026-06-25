@@ -1,31 +1,25 @@
 from pathlib import Path
+import time
 
 from flyin import MapParser, ParseError
-from flyin.router import MultiAgentRouter
+from flyin.algorithm import TimeExpandedGraph
 
 
 def main() -> None:
     path = Path("test_map.txt")
     parser = MapParser(path)
     try:
-        parser.parse()
+        start = time.perf_counter()
+        graph = parser.parse()
+        elapsed = time.perf_counter() - start
+        print(f"Parsed in {elapsed:.6f}s")
         parser.print_connections()
+        teg = TimeExpandedGraph(graph, 10)
+        teg.build(10)
     except ParseError as e:
         print(f"Error: {e}")
 
-    router = MultiAgentRouter(
-        zones=parser.zones,
-        connections=parser.connections,
-        start_zone=parser.start_zone,
-        end_zone=parser.end_zone
-    )
-    zone = parser.start_zone
-    print(
-        "Distance from",
-        zone.name,
-        f"to {parser.end_zone.name} is:",
-        router._shortest_path(parser.start_zone)
-    )
+
 
 
 if __name__ == "__main__":
