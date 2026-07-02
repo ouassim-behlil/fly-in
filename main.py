@@ -2,7 +2,7 @@ from pathlib import Path
 import time
 
 from flyin import MapParser, ParseError
-from flyin.algorithm import TimeExpandedGraph
+from flyin.algorithm import TimeExpandedGraph, Dinic
 
 
 def main() -> None:
@@ -16,6 +16,9 @@ def main() -> None:
         parser.print_connections()
         teg = TimeExpandedGraph(graph, 10)
         teg.build(10)
+        dinic = Dinic(teg)
+        print(dinic.max_flow(teg.source, teg.sink))
+
     except ParseError as e:
         print(f"Error: {e}")
 
