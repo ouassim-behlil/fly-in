@@ -1,25 +1,23 @@
 from pathlib import Path
 import time
 
-from flyin import MapParser, ParseError
-from flyin.algorithm import TimeExpandedGraph, Dinic
+from flyin import ParseError
+from flyin.algorithm import Solver
 
 
 def main() -> None:
     path = Path("test_map.txt")
-    parser = MapParser(path)
     try:
         start = time.perf_counter()
-        graph = parser.parse()
+        solver = Solver.from_map(path)
+        turns = solver.solve()
         elapsed = time.perf_counter() - start
-        print(f"Parsed in {elapsed:.6f}s")
-        parser.print_connections()
-        teg = TimeExpandedGraph(graph, 10)
-        teg.build(10)
-        dinic = Dinic(teg)
-        print(dinic.max_flow(teg.source, teg.sink))
+        print(f"Solved in {elapsed:.6f}s")
+        print(f"Minimum turns for {path}: {turns}")
 
     except ParseError as e:
+        print(f"Error: {e}")
+    except ValueError as e:
         print(f"Error: {e}")
 
 
