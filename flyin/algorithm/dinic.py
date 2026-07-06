@@ -53,23 +53,27 @@ class Dinic:
 		if u == sink:
 			return pushed
 		
-		edge_idx = self.it.get(u, 0)
-		while edge_idx < len(self.graph.get_edges(u)):
+		edges  = self.graph.get_edges(u)
 
-			edge = self.graph.get_edges(u)[edge_idx]
-			self.it[u] = edge_idx
+		while self.it.get(u, 0) < len(edges):
+
+			idx = self.it.get(u, 0)
+
+			edge = edges[idx]
 
 			if (
 				edge.dst in self.level
 				and self.level[edge.dst] == self.level[u] + 1
 				and edge.residual_capacity() > 0
 			):
-				flow = dfs(edge.dst, sink, min(pushed, edge.residual_capacity()))
+				flow = self.dfs(edge.dst, sink, min(pushed, edge.residual_capacity()))
 
 				if flow > 0:
 
 					edge.flow += flow
+					edge.reverse.flow -= flow
 					return flow
+			self.it[u] = idx + 1
 		return 0
 
 	def max_flow(self, source: TimeExpandedNode, sink: TimeExpandedNode) -> int:
