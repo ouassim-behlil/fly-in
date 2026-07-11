@@ -2,10 +2,10 @@ from __future__ import annotations
 
 
 from pathlib import Path
-from typing import List
+from typing import List, Tuple
 
 from flyin import MapParser
-from flyin.model import Graph
+from flyin.model import Graph, Zone
 
 from .dinic import Dinic
 from .time_expanded_graph import TimeExpandedGraph, TimeExpandedNode
@@ -16,7 +16,7 @@ class Solver:
 
     def __init__(self, graph: Graph):
         self.graph: Graph = graph
-        self.last_paths: List[List[str]] = []
+        self.last_paths: List[List[Zone]] = []
 
     @classmethod
     def from_map(cls, path: str | Path) -> "Solver":
@@ -34,7 +34,7 @@ class Solver:
     def can_deliver_all(self, turns: int) -> bool:
         return self.max_deliverable(turns) >= self.graph.nb_drones
 
-    def solve(self, max_turns: int = 100) -> int:
+    def solve(self, max_turns: int = 100) -> Tuple[int, List[List[Zone]]]:
         """
         Return the minimum turn count required to route all drones.
 
@@ -83,26 +83,38 @@ class Solver:
             _, best_teg = evaluate(best_turns)
 
         self.last_paths = self._extract_paths_per_drone(best_teg, self.graph.nb_drones)
-        #self._print_paths(self.last_paths)
-        return best_turns
+        self._print_paths(self.last_paths)
+        return best_turns, self.last_paths
 
 
     def _extract_paths_per_drone(
         self, teg: TimeExpandedGraph, nb_drones: int
-    ) -> List[List[str]]:
-        paths: List[List[str]] = []
+    ) -> List[List[Zone]]:
+
+        paths: List[List[Zone]] = []
 
         for _ in range(nb_drones):
             flow_path = self._consume_unit_flow_path(teg)
             if not flow_path:
                 break
 
-            zone_path: List[str] = []
+            zone_path: List[Zone] = []
             for node in flow_path:
+
+                assert node.zone_name is not None, "Zone name is None"
                 if node.zone_name.startswith("__") or not node.is_in:
                     continue
-                if not zone_path or zone_path[-1] != node.zone_name:
-                    zone_path.append(node.zone_name)
+
+                zone: Zone | None = None
+                for z in self.graph.zones:
+                    if z.name == node.zone_name:
+                        zone = z
+                        break
+                
+                
+                assert zone is not None, "Zone is not set"
+                if not zone_path or zone_path[-1].name != zone.name:
+                    zone_path.append(zone)
             paths.append(zone_path)
 
         if len(paths) != nb_drones:
@@ -126,6 +138,7 @@ class Solver:
                 found = dfs(edge.dst, path + [edge.dst])
                 if found:
                     edge.flow -= 1
+                    assert edge.reverse is not None
                     edge.reverse.flow += 1
                     return found
 
@@ -133,6 +146,6 @@ class Solver:
 
         return dfs(teg.source, [teg.source])
 
-    def _print_paths(self, paths: List[List[str]]) -> None:
+    def _print_paths(self, paths: List[List[Zone]]) -> None:
         for i, path in enumerate(paths, start=1):
-            print(f"Drone {i}: {' -> '.join(path)}")
+            print(f"Drone {i}: {' -> '.join([z.name for z in path])}")

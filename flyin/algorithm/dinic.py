@@ -72,6 +72,7 @@ class Dinic:
 				if flow > 0:
 
 					edge.flow += flow
+					assert edge.reverse is not None
 					edge.reverse.flow -= flow
 					return flow
 			self.it[u] = idx + 1

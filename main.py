@@ -8,8 +8,9 @@ def main() -> None:
     path = Path("test_map.txt")
     try:
         solver = Solver.from_map(path)
-        turns = solver.solve()
+        turns, paths = solver.solve()
         print(f"Minimum turns for {path}: {turns}")
+        print(paths)
 
     except ParseError as e:
         print(f"Error: {e}")
