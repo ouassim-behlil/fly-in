@@ -1,13 +1,14 @@
 from __future__ import annotations
 from typing import Dict, Set, List
 from dataclasses import dataclass
+import sys
 
-from flyin.model import Graph, ZoneType
+from flyin.model import Graph
 
 @dataclass
 class TimeExpandedNode:
     """ A node in the time expanded graph """
-    zone_name: str
+    zone_name: str | None
     turn: int
     is_in: bool
 
@@ -39,7 +40,7 @@ class Edge:
     src: TimeExpandedNode
     dst: TimeExpandedNode
     capacity: int
-    reverse: Edge = None
+    reverse: Edge | None = None
     flow: int = 0
 
     def residual_capacity(self) -> int:
@@ -120,7 +121,7 @@ class TimeExpandedGraph:
                     next_in_Node = TimeExpandedNode(zone.name, t + 1, True)
 
                     # unlimited capacity for waiting
-                    self.add_edge(out_node, next_in_Node, float('inf'))
+                    self.add_edge(out_node, next_in_Node, sys.maxsize)
                 
         # step 2: Add connection edges
         for conn in self.original_graph.connections:
@@ -152,7 +153,7 @@ class TimeExpandedGraph:
             self.add_edge(self.source, start_in, self.original_graph.nb_drones)
 
             goal_out = TimeExpandedNode(self.original_graph.end_zone.name, t, False)
-            self.add_edge(goal_out, self.sink, float('inf'))
+            self.add_edge(goal_out, self.sink, sys.maxsize)
         
     
     def get_edges(self, src: TimeExpandedNode) -> List[Edge]:
