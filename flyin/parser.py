@@ -1,6 +1,7 @@
 
 from pathlib import Path
-from typing import Dict, List, Tuple, Set
+from typing import Dict, List, Tuple, Set, Any
+from collections.abc import Callable
 
 from flyin.model import Zone, Metadata, ZoneType, Connection, Graph
 from flyin.utils import ParseError
@@ -13,12 +14,12 @@ class MapParser:
         self.zones: Dict[str, Zone] = dict()
         self.unique_connections: Set[Tuple[str, str]] = set()
         self.connections: List[Connection] = list()
-        self.start_zone: str | None = None
-        self.end_zone: str | None = None
+        self.start_zone: Zone | None = None
+        self.end_zone: Zone | None = None
 
-    def parse(self) -> None:
+    def parse(self) -> Graph:
 
-        handlers = {
+        handlers: Dict[str, Callable[..., Any]] = {
                     "nb_drones": self._parse_nb_drones,
                     "start_hub": self._parse_start_hub,
                     "end_hub": self._parse_end_hub,
@@ -33,7 +34,7 @@ class MapParser:
 
                 line = raw.strip()
                 
-                rest, sep, comment = line.partition('#')
+                rest, sep, _ = line.partition('#')
 
                 if sep:
                     line = rest.strip()
@@ -58,6 +59,10 @@ class MapParser:
                 handler(value, line_number)
 
         self._validate_final_state()
+
+        assert self.nb_drones is not None, "Number of drones not set"
+        assert self.start_zone is not None, "Start zone not set"
+        assert self.end_zone is not None, "End zone not set"
 
         return Graph(
             self.nb_drones,
@@ -253,7 +258,7 @@ class MapParser:
 
         metadata = Metadata()
 
-        zone_type_handler = {
+        zone_type_handler: Dict[str, ZoneType] = {
             'normal': ZoneType.NORMAL,
             'blocked': ZoneType.BLOCKED,
             'restricted': ZoneType.RESTRICTED,
@@ -271,7 +276,7 @@ class MapParser:
                 )
 
             if key == 'zone':
-                metadata.zone_type = zone_type_handler.get(value)
+                metadata.zone_type = zone_type_handler.get(value, ZoneType.NORMAL)
 
                 if not metadata.zone_type:
 
@@ -330,6 +335,7 @@ class MapParser:
             raise ParseError(0, "Missing end_hub")
 
     def print_start_zone(self) -> None:
+        assert self.start_zone is not None, "Start zone not set"
         print('-' * 100)
         print("Start Zone:")
         print("name:", self.start_zone.name)
@@ -340,6 +346,7 @@ class MapParser:
         print("max drones:", self.start_zone.metadata.max_drones)
 
     def print_end_zone(self) -> None:
+        assert self.end_zone is not None, "End zone not set"
         print('-' * 100)
         print("End Zone:")
         print("name:", self.end_zone.name)

@@ -1,6 +1,7 @@
 from __future__ import annotations
 from typing import Dict
 from collections import deque
+import sys
 
 from .time_expanded_graph import TimeExpandedGraph, TimeExpandedNode
 
@@ -87,7 +88,7 @@ class Dinic:
 
 			while True:
 
-				pushed = self.dfs(source, sink, float('inf'))
+				pushed = self.dfs(source, sink, sys.maxsize)
 
 				if pushed == 0:
 					break

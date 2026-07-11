@@ -2,7 +2,6 @@ from dataclasses import dataclass
 from typing import List
 
 from .connection import Connection
-from .drone import Drone
 from .zone import Zone
 
 

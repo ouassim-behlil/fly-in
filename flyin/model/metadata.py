@@ -11,6 +11,6 @@ class ZoneType(str, Enum):
 @dataclass
 class Metadata:
     zone_type: ZoneType = ZoneType.NORMAL
-    color: str = None
+    color: str | None = None
     max_drones: int = 1
     cost: int = 1

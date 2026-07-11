@@ -6,7 +6,6 @@ from typing import List
 
 from flyin import MapParser
 from flyin.model import Graph
-from flyin.utils import timeit
 
 from .dinic import Dinic
 from .time_expanded_graph import TimeExpandedGraph, TimeExpandedNode
@@ -35,7 +34,7 @@ class Solver:
     def can_deliver_all(self, turns: int) -> bool:
         return self.max_deliverable(turns) >= self.graph.nb_drones
 
-    def solve(self, max_turns: int = 200) -> int:
+    def solve(self, max_turns: int = 100) -> int:
         """
         Return the minimum turn count required to route all drones.
 

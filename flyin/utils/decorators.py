@@ -4,7 +4,7 @@ from typing import Any, Callable
 import tracemalloc
 
 
-def timeit(func: Callable) -> Callable:
+def timeit(func: Callable[..., Any]) -> Callable[..., Any]:
     @wraps(func)
     def wrapper(*args: Any, **kwargs: Any) -> Any:
         start = time.perf_counter()
@@ -16,7 +16,7 @@ def timeit(func: Callable) -> Callable:
     return wrapper
 
 
-def measure_memory(func: Callable) -> Callable:
+def measure_memory(func: Callable[..., Any]) -> Callable[..., Any]:
     @wraps(func)
     def wrapper(*args: Any, **kwargs: Any) -> Any:
         tracemalloc.start()
