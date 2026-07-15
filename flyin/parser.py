@@ -16,6 +16,8 @@ class MapParser:
         self.connections: List[Connection] = list()
         self.start_zone: Zone | None = None
         self.end_zone: Zone | None = None
+        self._start_has_explicit_max_drones: bool = False
+        self._end_has_explicit_max_drones: bool = False
 
     def parse(self) -> Graph:
 
@@ -90,7 +92,13 @@ class MapParser:
         if self.start_zone:
             raise ParseError(line_number, "There must be exactly one start_hub zone!")
 
+        self._start_has_explicit_max_drones = "max_drones=" in value
         self.start_zone = self._parse_zone(value, line_number)
+        if (
+            not self._start_has_explicit_max_drones
+            and self.nb_drones is not None
+        ):
+            self.start_zone.metadata.max_drones = self.nb_drones
         self.zones[self.start_zone.name] = self.start_zone
         
 
@@ -99,7 +107,13 @@ class MapParser:
         if self.end_zone:
             raise ParseError(line_number, "There must be exactly one end_hub zone!")
 
+        self._end_has_explicit_max_drones = "max_drones=" in value
         self.end_zone = self._parse_zone(value, line_number)
+        if (
+            not self._end_has_explicit_max_drones
+            and self.nb_drones is not None
+        ):
+            self.end_zone.metadata.max_drones = self.nb_drones
         self.zones[self.end_zone.name] = self.end_zone
 
     def _parse_hub(self, value: str, line_number: int) -> None:
@@ -333,6 +347,16 @@ class MapParser:
         if self.end_zone is None:
 
             raise ParseError(0, "Missing end_hub")
+
+        assert self.nb_drones is not None, "Number of drones not set"
+        assert self.start_zone is not None, "Start zone not set"
+        assert self.end_zone is not None, "End zone not set"
+
+        if not self._start_has_explicit_max_drones:
+            self.start_zone.metadata.max_drones = self.nb_drones
+
+        if not self._end_has_explicit_max_drones:
+            self.end_zone.metadata.max_drones = self.nb_drones
 
     def print_start_zone(self) -> None:
         assert self.start_zone is not None, "Start zone not set"

@@ -10,8 +10,7 @@ def main() -> None:
         solver = Solver.from_map(path)
         turns, paths = solver.solve()
         print(f"Minimum turns for {path}: {turns}")
-        print(paths)
-
+        solver.print_output(paths, turns)
     except ParseError as e:
         print(f"Error: {e}")
     except ValueError as e:

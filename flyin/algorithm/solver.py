@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import List, Tuple
 
 from flyin import MapParser
-from flyin.model import Graph, Zone
+from flyin.model import Graph, Zone, ZoneType
 
 from .dinic import Dinic
 from .time_expanded_graph import TimeExpandedGraph, TimeExpandedNode
@@ -17,6 +17,7 @@ class Solver:
     def __init__(self, graph: Graph):
         self.graph: Graph = graph
         self.last_paths: List[List[Zone]] = []
+        self._zone_lookup = {zone.name: zone for zone in graph.zones}
 
     @classmethod
     def from_map(cls, path: str | Path) -> "Solver":
@@ -82,13 +83,15 @@ class Solver:
         if best_teg is None:
             _, best_teg = evaluate(best_turns)
 
-        self.last_paths = self._extract_paths_per_drone(best_teg, self.graph.nb_drones)
+        self.last_paths = self._extract_paths_per_drone(
+            best_teg, self.graph.nb_drones, best_turns
+        )
         self._print_paths(self.last_paths)
         return best_turns, self.last_paths
 
 
     def _extract_paths_per_drone(
-        self, teg: TimeExpandedGraph, nb_drones: int
+        self, teg: TimeExpandedGraph, nb_drones: int, turns: int
     ) -> List[List[Zone]]:
 
         paths: List[List[Zone]] = []
@@ -98,24 +101,27 @@ class Solver:
             if not flow_path:
                 break
 
-            zone_path: List[Zone] = []
+            turn_to_zone: dict[int, Zone] = {}
             for node in flow_path:
-
                 assert node.zone_name is not None, "Zone name is None"
                 if node.zone_name.startswith("__") or not node.is_in:
                     continue
 
-                zone: Zone | None = None
-                for z in self.graph.zones:
-                    if z.name == node.zone_name:
-                        zone = z
-                        break
-                
-                
+                zone = self._zone_lookup.get(node.zone_name)
                 assert zone is not None, "Zone is not set"
-                if not zone_path or zone_path[-1].name != zone.name:
-                    zone_path.append(zone)
-            paths.append(zone_path)
+                turn_to_zone[node.turn] = zone
+
+            if not turn_to_zone:
+                raise ValueError("Failed to extract a turn-based path for a drone.")
+
+            timeline: List[Zone] = []
+            current = self.graph.start_zone
+            for turn in range(turns + 1):
+                if turn in turn_to_zone:
+                    current = turn_to_zone[turn]
+                timeline.append(current)
+
+            paths.append(timeline)
 
         if len(paths) != nb_drones:
             raise ValueError(
@@ -149,3 +155,28 @@ class Solver:
     def _print_paths(self, paths: List[List[Zone]]) -> None:
         for i, path in enumerate(paths, start=1):
             print(f"Drone {i}: {' -> '.join([z.name for z in path])}")
+    
+
+    def print_output(self, paths: List[List[Zone]], turns: int) -> None:
+        outputs: List[List[str]] = [[] for _ in range(turns)]
+
+        for i, path in enumerate(paths, start=1):
+            # Process per drone to place restricted-zone travel over two turns:
+            # departure turn: Dk-src-restricted, next turn: Dk-restricted.
+            for t in range(1, min(turns + 1, len(path))):
+                prev_zone = path[t - 1]
+                curr_zone = path[t]
+
+                if curr_zone.name == prev_zone.name:
+                    continue
+
+                if curr_zone.metadata.zone_type == ZoneType.RESTRICTED:
+                    if t - 1 >= 1:
+                        outputs[t - 2].append(f"D{i}-{prev_zone.name}-{curr_zone.name}")
+                    outputs[t - 1].append(f"D{i}-{curr_zone.name}")
+                    continue
+
+                outputs[t - 1].append(f"D{i}-{curr_zone.name}")
+
+        for turn_output in outputs:
+            print(f"{' '.join(turn_output)}")
