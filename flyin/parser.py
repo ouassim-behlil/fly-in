@@ -2,6 +2,7 @@
 from pathlib import Path
 from typing import Dict, List, Tuple, Set, Any
 from collections.abc import Callable
+from collections import defaultdict, deque
 
 from flyin.model import Zone, Metadata, ZoneType, Connection, Graph
 from flyin.utils import ParseError
@@ -333,6 +334,31 @@ class MapParser:
                 )
         
         return metadata
+    
+    def check_connectivity(self) -> bool:
+
+        g: Dict[str, List[str]] = defaultdict(list)
+
+        for u, v in self.unique_connections:
+            g[u].append(v)
+            g[v].append(u)
+        
+        assert self.start_zone is not None
+        start: str = self.start_zone.name
+        queue = deque([start])
+        visited: Set[str] = set([start])
+
+        while queue:
+            zone = queue.popleft()
+            for neighbor in g[zone]:
+                if neighbor in visited:
+                    continue
+                
+                visited.add(neighbor)
+                queue.append(neighbor)
+        return len(visited) == len(self.zones)
+
+
 
     def _validate_final_state(self) -> None:
 
@@ -347,6 +373,10 @@ class MapParser:
         if self.end_zone is None:
 
             raise ParseError(0, "Missing end_hub")
+        
+        if not self.check_connectivity():
+
+            raise ParseError(0, "Some zones are isolated and we can't reach them")
 
         assert self.nb_drones is not None, "Number of drones not set"
         assert self.start_zone is not None, "Start zone not set"
