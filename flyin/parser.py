@@ -1,8 +1,8 @@
-
 from pathlib import Path
-from typing import Dict, List, Tuple, Set, Any
+from typing import Dict, List, Tuple, Set, Optional
 from collections.abc import Callable
 from collections import defaultdict, deque
+from sys import maxsize
 
 from flyin.model import Zone, Metadata, ZoneType, Connection, Graph
 from flyin.utils import ParseError
@@ -11,62 +11,54 @@ from flyin.utils import ParseError
 class MapParser:
     def __init__(self, path: Path) -> None:
         self.path = path
-        self.nb_drones: int | None = None
-        self.zones: Dict[str, Zone] = dict()
+        self.nb_drones: Optional[int] = None
+        self.zones: Dict[str, Zone] = {}
         self.unique_connections: Set[Tuple[str, str]] = set()
-        self.connections: List[Connection] = list()
-        self.start_zone: Zone | None = None
-        self.end_zone: Zone | None = None
-        self._start_has_explicit_max_drones: bool = False
-        self._end_has_explicit_max_drones: bool = False
+        self.connections: List[Connection] = []
+        self.start_zone: Optional[Zone] = None
+        self.end_zone: Optional[Zone] = None
 
     def parse(self) -> Graph:
-
-        handlers: Dict[str, Callable[..., Any]] = {
-                    "nb_drones": self._parse_nb_drones,
-                    "start_hub": self._parse_start_hub,
-                    "end_hub": self._parse_end_hub,
-                    "hub": self._parse_hub,
-                    "connection": self._parse_connection,
-                }
-
+        handlers: Dict[str, Callable[[str, int], None]] = {
+            "nb_drones": self._parse_nb_drones,
+            "start_hub": self._parse_start_hub,
+            "end_hub": self._parse_end_hub,
+            "hub": self._parse_hub,
+            "connection": self._parse_connection,
+        }
 
         with self.path.open("r", encoding="utf-8", buffering=1 << 16) as f:
-
             for line_number, raw in enumerate(f, start=1):
+                line = raw.partition('#')[0].strip()
 
-                line = raw.strip()
-                
-                rest, sep, _ = line.partition('#')
-
-                if sep:
-                    line = rest.strip()
-                
-                if len(line) == 0:
+                if not line:
                     continue
-                
 
                 key, sep, value = line.partition(':')
-
                 if not sep:
-                    raise ParseError(line_number, f"Line should start with: '<key>:' but got {line}")
+                    raise ParseError(
+                        line_number,
+                        f"Line should start with: '<key>:' but got {line}"
+                    )
 
-                key = key.strip()
-                value = value.strip()
-
+                key, value = key.strip(), value.strip()
                 handler = handlers.get(key)
 
                 if not handler:
                     raise ParseError(line_number, f"Unknown directive: {line}")
-                
+
+                if self.nb_drones is None and key != "nb_drones":
+                    raise ParseError(
+                        line_number,
+                        "The first directive must be 'nb_drones'!"
+                    )
+
                 handler(value, line_number)
 
         self._validate_final_state()
-
-        assert self.nb_drones is not None, "Number of drones not set"
-        assert self.start_zone is not None, "Start zone not set"
-        assert self.end_zone is not None, "End zone not set"
-
+        assert self.end_zone is not None
+        assert self.nb_drones is not None
+        assert self.start_zone is not None
         return Graph(
             self.nb_drones,
             list(self.zones.values()),
@@ -74,100 +66,122 @@ class MapParser:
             self.start_zone,
             self.end_zone
         )
-        
-    def _parse_nb_drones(self, value: str, line_number: int) -> None:
 
-        if self.nb_drones:
+    def _parse_nb_drones(self, value: str, line_number: int) -> None:
+        if self.nb_drones is not None:
             raise ParseError(line_number, "nb_drones already declared")
 
         try:
             self.nb_drones = int(value)
-        except (ValueError, ParseError):
-            raise ParseError(line_number, f"nb_drones must be a positive number! we got: '{value}'")
+        except ValueError:
+            raise ParseError(
+                line_number,
+                f"nb_drones must be a positive integer! we got: '{value}'"
+            )
 
         if self.nb_drones <= 0:
-            raise ParseError(line_number, f"nb_drones must be a positive number! we got: '{value}'")
-    
+            raise ParseError(
+                line_number,
+                f"nb_drones must be positive! we got: '{value}'"
+            )
+
     def _parse_start_hub(self, value: str, line_number: int) -> None:
-
         if self.start_zone:
-            raise ParseError(line_number, "There must be exactly one start_hub zone!")
+            raise ParseError(
+                line_number,
+                "There must be exactly one start_hub zone!"
+            )
 
-        self._start_has_explicit_max_drones = "max_drones=" in value
         self.start_zone = self._parse_zone(value, line_number)
-        if (
-            not self._start_has_explicit_max_drones
-            and self.nb_drones is not None
-        ):
+
+        if self.start_zone.metadata.zone_type == ZoneType.BLOCKED:
+            self.start_zone.metadata.zone_type = ZoneType.NORMAL
+            self.start_zone.metadata.cost = 1
+
+        if self.nb_drones is not None:
             self.start_zone.metadata.max_drones = self.nb_drones
+        else:
+            self.start_zone.metadata.max_drones = maxsize
+
         self.zones[self.start_zone.name] = self.start_zone
-        
 
     def _parse_end_hub(self, value: str, line_number: int) -> None:
-
         if self.end_zone:
-            raise ParseError(line_number, "There must be exactly one end_hub zone!")
+            raise ParseError(
+                line_number,
+                "There must be exactly one end_hub zone!"
+            )
 
-        self._end_has_explicit_max_drones = "max_drones=" in value
         self.end_zone = self._parse_zone(value, line_number)
-        if (
-            not self._end_has_explicit_max_drones
-            and self.nb_drones is not None
-        ):
+
+        if self.end_zone.metadata.zone_type == ZoneType.BLOCKED:
+            self.end_zone.metadata.zone_type = ZoneType.NORMAL
+            self.end_zone.metadata.cost = 1
+
+        if self.nb_drones is not None:
             self.end_zone.metadata.max_drones = self.nb_drones
+        else:
+            self.end_zone.metadata.max_drones = maxsize
+
         self.zones[self.end_zone.name] = self.end_zone
 
     def _parse_hub(self, value: str, line_number: int) -> None:
-
         zone = self._parse_zone(value, line_number)
         self.zones[zone.name] = zone
 
     def _parse_connection(self, line: str, line_number: int) -> None:
-
         connection = Connection()
+        connection.max_link_capacity = 1
 
-        # case when metadata exist
-        start, end = line.find('['), line.find(']')
+        start = line.find('[')
+        end = line.rfind(']')
 
-        if start != -1:
-
-            if end == -1:
+        if start != -1 or end != -1:
+            if start == -1 or end == -1 or end < start:
                 raise ParseError(
                     line_number,
-                    "Invalid metadata! Bracket not closed"
+                    "Invalid metadata! Brackets not correctly closed."
                 )
 
-            meta_str = line[start + 1: end].strip()
-
-            key, sep, value = meta_str.partition('=')
-
-            key = key.strip()
-            value = value.strip()
-
-            if not sep:
+            meta_raw = line[start: end + 1]
+            if meta_raw.count('[') != meta_raw.count(']'):
                 raise ParseError(
                     line_number,
-                    f"Invalid metadata! expected 'key=value' but got {meta_str}"
+                    "Invalid metadata! Unbalanced brackets."
                 )
 
-            if key != 'max_link_capacity':
+            inner_content = line[start + 1: end]
+            if '][' in inner_content or '] [' in inner_content:
                 raise ParseError(
                     line_number,
-                    f"Invalid key in connection metadata: '{key}'!"
+                    "Invalid metadata! Adjacent or multiple "
+                    "separate bracket groups are not allowed."
                 )
 
-            try:
-                connection.max_link_capacity = int(value)
-            except ValueError:
-                raise ParseError(
-                    line_number,
-                    f"max_link_capacity must be an integer but got: '{value.strip()}'!"
-                )
+            meta_str = inner_content.strip('[] ')
+            for element in meta_str.split():
+                key, sep, value = element.partition('=')
+                if not sep or key.strip() != 'max_link_capacity':
+                    raise ParseError(
+                        line_number,
+                        f"Invalid connection metadata: '{element}'"
+                    )
 
-            line = line[:start]
+                try:
+                    capacity = int(value.strip())
+                    if capacity <= 0:
+                        raise ValueError
+                    connection.max_link_capacity = capacity
+                except ValueError:
+                    raise ParseError(
+                        line_number,
+                        f"max_link_capacity must be a positive integer, "
+                        f"got: '{value}'!"
+                    )
+
+            line = line[:start].strip()
 
         zone1, sep, zone2 = line.partition('-')
-
         if not sep:
             raise ParseError(
                 line_number,
@@ -176,217 +190,187 @@ class MapParser:
 
         zone1, zone2 = zone1.strip(), zone2.strip()
 
-        if '-' in zone1 or '-' in zone2:
-
+        if '-' in zone1 or '-' in zone2 or ' ' in zone1 or ' ' in zone2:
             raise ParseError(
                 line_number,
-                "The connection syntax forbids dashes in zone names!"
+                "Connection syntax forbids dashes and spaces in zone names!"
             )
 
-        if zone1 not in self.zones:
-
-            raise ParseError(line_number, f"{zone1} not in zones!")
-
-        if zone2 not in self.zones:
-
-            raise ParseError(line_number, f"{zone2} not in zones!")
-
-        if (zone1, zone2) in self.unique_connections or (zone2, zone1) in self.unique_connections:
-
+        if zone1 not in self.zones or zone2 not in self.zones:
             raise ParseError(
                 line_number,
-                "Connection already exist!"
+                f"One or both zones in connection '{zone1}-{zone2}' "
+                "do not exist!"
             )
+
+        if ((zone1, zone2) in self.unique_connections or
+                (zone2, zone1) in self.unique_connections):
+            raise ParseError(line_number, "Connection already exists!")
+
         connection.zone1 = zone1
         connection.zone2 = zone2
         self.connections.append(connection)
-
         self.unique_connections.add((zone1, zone2))
 
     def _parse_zone(self, line: str, line_number: int) -> "Zone":
-        
-        # Parse name, coords and metadata
-        metadata = Metadata()
-
         start = line.find('[')
+        end = line.rfind(']')
 
-        if start != -1:
-
-            metadata = self._parse_zone_metadata(line, line_number)
-
-            line = line[:start].strip()
-
-        line_split = line.split()
-
-        if len(line_split) != 3:
-
-            raise ParseError(
-                line_number,
-                "Invalid number of zone parameters expected "
-                f"but got {len(line.split())}"
-            )
-
-        name, x, y = line_split
-
-        if '-' in name:
-
-            raise ParseError(
-                line_number,
-                "Zone names can use any valid characters but dashes and spaces!"
+        if start != -1 or end != -1:
+            if start == -1 or end == -1 or end < start:
+                raise ParseError(
+                    line_number,
+                    "Invalid metadata! Brackets not correctly closed."
                 )
 
-        if name in self.zones:
+            meta_raw = line[start: end + 1]
+            if meta_raw.count('[') != meta_raw.count(']'):
+                raise ParseError(
+                    line_number,
+                    "Invalid metadata! Unbalanced brackets."
+                )
 
+            inner_content = line[start + 1: end]
+            if '][' in inner_content or '] [' in inner_content:
+                raise ParseError(
+                    line_number,
+                    "Invalid metadata! Adjacent or multiple "
+                    "separate bracket groups are not allowed."
+                )
+
+            meta_str = inner_content.strip('[] ')
+            metadata = self._parse_zone_metadata(meta_str, line_number)
+
+            line = line[:start].strip()
+        else:
+            metadata = Metadata()
+            metadata.zone_type = ZoneType.NORMAL
+            metadata.max_drones = 1
+            metadata.cost = 1
+
+        line_split = line.split()
+        if len(line_split) != 3:
             raise ParseError(
                 line_number,
-                "Each zone must have a unique name!"
+                f"Invalid number of zone parameters, expected 3 "
+                f"but got {len(line_split)}"
+            )
+
+        name, _x, _y = line_split
+
+        if '-' in name or ' ' in name:
+            raise ParseError(
+                line_number,
+                "Zone names cannot contain dashes or spaces!"
+            )
+
+        if name in self.zones:
+            raise ParseError(
+                line_number, f"Zone name '{name}' already exists!"
             )
 
         try:
-
-            x, y = int(x), int(y)
-
+            x, y = int(_x), int(_y)
         except ValueError:
+            raise ParseError(line_number, "Zone coordinates must be integers!")
 
-            raise ParseError(
-                line_number,
-                "Each zone must have valid integer coordinates!"
-            )
+        return Zone(name=name, x=x, y=y, metadata=metadata)
 
-        zone = Zone(
-            name = name,
-            x=x,
-            y=y,
-            metadata=metadata
-        )
-        return zone
-    
-    def _parse_zone_metadata(self, line: str, line_number: int) -> "Metadata":
-
-        start = line.find('[')
-        end = line.find(']')
-
-        if start == -1 or end == -1:
-            raise ParseError(line_number, "Invalid metadata! use brackets.")
-
-        meta_str = line[start + 1: end].strip()
-
+    def _parse_zone_metadata(
+        self, meta_str: str, line_number: int
+    ) -> "Metadata":
         metadata = Metadata()
+        metadata.zone_type = ZoneType.NORMAL
+        metadata.max_drones = 1
+        metadata.cost = 1
 
-        zone_type_handler: Dict[str, ZoneType] = {
+        zone_type_map: Dict[str, ZoneType] = {
             'normal': ZoneType.NORMAL,
             'blocked': ZoneType.BLOCKED,
             'restricted': ZoneType.RESTRICTED,
             'priority': ZoneType.PRIORITY
         }
 
-        for element in  meta_str.split():
-
+        for element in meta_str.split():
             key, sep, value = element.partition('=')
-
             if not sep:
                 raise ParseError(
                     line_number,
-                    f"Invalid metadata! expected 'key=value' but got {element}"
+                    f"Invalid metadata element: '{element}'"
                 )
 
             if key == 'zone':
-                metadata.zone_type = zone_type_handler.get(value, ZoneType.NORMAL)
-
-                if not metadata.zone_type:
-
+                if value not in zone_type_map:
                     raise ParseError(
                         line_number,
-                        f"Invalid zone type: {value}!"
+                        f"Invalid zone type: '{value}'!"
                     )
-
-                if value == 'restricted':
+                metadata.zone_type = zone_type_map[value]
+                if metadata.zone_type == ZoneType.RESTRICTED:
                     metadata.cost = 2
-                    
             elif key == 'color':
-
-                if len(value) == 0:
-
-                    raise ParseError(
-                        line_number,
-                        f"Color must be a single word but got: {value}"
-                    )
-
+                if not value:
+                    raise ParseError(line_number, "Color cannot be empty!")
                 metadata.color = value
-            
             elif key == 'max_drones':
-
                 try:
-
-                    metadata.max_drones = int(value)
-
+                    capacity = int(value)
+                    if capacity <= 0:
+                        raise ValueError
+                    metadata.max_drones = capacity
                 except ValueError:
-
                     raise ParseError(
                         line_number,
-                        f"max_drones must be an integer but got: {value}!"
+                        f"max_drones must be a positive integer, "
+                        f"got: '{value}'!"
                     )
             else:
-
                 raise ParseError(
-                    line_number,
-                    f"Invalid key in metadata: {key}!"
+                    line_number, f"Invalid metadata key: '{key}'!"
                 )
-        
+
         return metadata
-    
+
     def check_connectivity(self) -> bool:
+        if not self.start_zone:
+            return False
 
         g: Dict[str, List[str]] = defaultdict(list)
-
         for u, v in self.unique_connections:
             g[u].append(v)
             g[v].append(u)
-        
-        assert self.start_zone is not None
+
         start: str = self.start_zone.name
         queue = deque([start])
-        visited: Set[str] = set([start])
+        visited: Set[str] = {start}
 
         while queue:
             zone = queue.popleft()
             for neighbor in g[zone]:
-                if neighbor in visited:
-                    continue
-                
-                visited.add(neighbor)
-                queue.append(neighbor)
+                if neighbor not in visited:
+                    visited.add(neighbor)
+                    queue.append(neighbor)
+
         return len(visited) == len(self.zones)
 
-
-
     def _validate_final_state(self) -> None:
-
         if self.nb_drones is None:
-
-            raise ParseError(0, "Missing nb_drones")
-
+            raise ParseError(0, "Missing nb_drones declaration")
         if self.start_zone is None:
-
-            raise ParseError(0, "Missing start_hub")
-
+            raise ParseError(0, "Missing start_hub declaration")
         if self.end_zone is None:
+            raise ParseError(0, "Missing end_hub declaration")
 
-            raise ParseError(0, "Missing end_hub")
-        
-        if not self.check_connectivity():
-
-            raise ParseError(0, "Some zones are isolated and we can't reach them")
-
-        assert self.nb_drones is not None, "Number of drones not set"
-        assert self.start_zone is not None, "Start zone not set"
-        assert self.end_zone is not None, "End zone not set"
-
-        if not self._start_has_explicit_max_drones:
+        if self.start_zone and self.nb_drones is not None:
             self.start_zone.metadata.max_drones = self.nb_drones
-
-        if not self._end_has_explicit_max_drones:
+        if self.end_zone and self.nb_drones is not None:
             self.end_zone.metadata.max_drones = self.nb_drones
+
+        if not self.check_connectivity():
+            raise ParseError(
+                0,
+                "Disconnected map: some zones cannot be reached."
+            )
 
     def print_start_zone(self) -> None:
         assert self.start_zone is not None, "Start zone not set"
