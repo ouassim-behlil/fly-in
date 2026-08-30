@@ -405,7 +405,7 @@ class MapParser:
             print("color:", zone.metadata.color)
             print("max drones:", zone.metadata.max_drones)
 
-    def print_connections(self):
+    def print_connections(self) -> None:
         print('-' * 100)
         for con in self.connections:
             print()
