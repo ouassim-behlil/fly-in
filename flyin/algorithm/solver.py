@@ -5,7 +5,9 @@ from pathlib import Path
 from typing import List, Tuple
 
 from flyin import MapParser, InfeasibleMapError
+from flyin.utils import colorize
 from flyin.model import Graph, Zone, ZoneType
+
 
 from .dinic import Dinic
 from .time_expanded_graph import TimeExpandedGraph, TimeExpandedNode
@@ -231,10 +233,21 @@ class Solver:
 
     def _print_paths(self, paths: List[List[Zone]]) -> None:
         for i, path in enumerate(paths, start=1):
-            print(f"Drone {i}: {' -> '.join([z.name for z in path])}")
+            names = [colorize(z.name, z.metadata.color) for z in path]
+            print(f"Drone {i}: {' -> '.join(names)}")
 
-    def print_output(self, paths: List[List[Zone]], turns: int) -> None:
+    def print_output(
+        self,
+        paths: List[List[Zone]],
+        turns: int,
+        use_color: bool = True
+    ) -> None:
         outputs: List[List[str]] = [[] for _ in range(turns)]
+
+        def fmt_zone(z: Zone) -> str:
+            if not use_color:
+                return z.name
+            return colorize(z.name, z.metadata.color)
 
         for i, path in enumerate(paths, start=1):
             # Process per drone to place restricted-zone travel over two turns:
@@ -248,12 +261,14 @@ class Solver:
 
                 if curr_zone.metadata.zone_type == ZoneType.RESTRICTED:
                     if t - 1 >= 1:
-                        token = f"D{i}-{prev_zone.name}-{curr_zone.name}"
+                        p_name = fmt_zone(prev_zone)
+                        c_name = fmt_zone(curr_zone)
+                        token = f"D{i}-{p_name}-{c_name}"
                         outputs[t - 2].append(token)
-                    outputs[t - 1].append(f"D{i}-{curr_zone.name}")
+                    outputs[t - 1].append(f"D{i}-{fmt_zone(curr_zone)}")
                     continue
 
-                outputs[t - 1].append(f"D{i}-{curr_zone.name}")
+                outputs[t - 1].append(f"D{i}-{fmt_zone(curr_zone)}")
 
         for turn_output in outputs:
             print(f"{' '.join(turn_output)}")

@@ -16,6 +16,11 @@ def main() -> None:
         default="map.txt",
         help="Path to the map file (defaults to 'test_map.txt' if omitted)"
     )
+    parser.add_argument(
+        "--no-color",
+        action="store_true",
+        help="Disable colored terminal output"
+    )
 
     args = parser.parse_args()
     path = Path(args.map_file)
@@ -23,9 +28,10 @@ def main() -> None:
     try:
         solver = Solver.from_map(path)
         turns, paths = solver.solve()
-        solver.print_output(paths, turns)
+        solver.print_output(paths, turns, use_color=not args.no_color)
 
     except ParseError as e:
+
         print(f"Error: {e}")
     except InfeasibleMapError as e:
         print(f"Error: {e}")
@@ -36,4 +42,4 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    main()
