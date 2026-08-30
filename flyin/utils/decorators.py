@@ -24,6 +24,11 @@ def measure_memory(func: Callable[..., Any]) -> Callable[..., Any]:
         current, peak = tracemalloc.get_traced_memory()
         tracemalloc.stop()
 
-        print(f"{func.__name__} memory: current={current/1024:.2f} KB, peak={peak/1024:.2f} KB")
+        cur_kb = current / 1024
+        peak_kb = peak / 1024
+        print(
+            f"{func.__name__} memory: current={cur_kb:.2f} KB, "
+            f"peak={peak_kb:.2f} KB"
+        )
         return result
     return wrapper

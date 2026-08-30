@@ -8,6 +8,7 @@ class ZoneType(str, Enum):
     RESTRICTED = "restricted"
     PRIORITY = "priority"
 
+
 @dataclass
 class Metadata:
     zone_type: ZoneType = ZoneType.NORMAL

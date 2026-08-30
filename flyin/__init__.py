@@ -1,17 +1,18 @@
 from .parser import MapParser
-from .utils import ParseError
+from .utils import ParseError, InfeasibleMapError
 from .model import (
-	Connection,
-	Drone,
-	Zone,
-	ZoneType
+    Connection,
+    Drone,
+    Zone,
+    ZoneType
 )
 
 __all__ = [
-	'MapParser',
-	'ParseError',
-	'Connection',
-	'Drone',
-	'Zone',
-	'ZoneType'
+    'MapParser',
+    'ParseError',
+    'InfeasibleMapError',
+    'Connection',
+    'Drone',
+    'Zone',
+    'ZoneType'
 ]

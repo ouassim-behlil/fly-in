@@ -4,4 +4,12 @@ version = "0.1.0"
 description = "drone routing system that navigates multiple autonomous drones from a central base to a target location through a dynamic network."
 readme = "README.md"
 requires-python = ">=3.12"
-dependencies = []
+dependencies = [
+    "flake8>=7.3.0",
+    "mypy>=2.3.1",
+    "pytest>=9.1.1",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+
