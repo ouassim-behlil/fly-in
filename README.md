@@ -1,4 +1,4 @@
-*This project has been created as part of the 42 curriculum by obehlil, rouboual.*
+*This project has been created as part of the 42 curriculum by obehlil.*
 
 # fly-in
 
@@ -141,11 +141,11 @@ The routing and scheduling problem is modeled as a **Max-Flow problem on a Time-
 
 ### 3. Time-Expanded Network Construction
 To incorporate time and capacity constraints simultaneously, the static graph is expanded across $T$ discrete time layers ($t \in [0, T]$):
-- **Node Splitting**: Every zone $u$ at turn $t$ is split into an ingress node $u_{\text{in}}[t]$ and egress node $u_{\text{out}}[t]$ with directed capacity $\text{max\_drones}(u)$.
+- **Node Splitting**: Every zone $u$ at turn $t$ is split into an ingress node $u_{\text{in}}[t]$ and egress node $u_{\text{out}}[t]$ with directed capacity `max_drones(u)`.
 - **Temporal Waiting**: Edges $u_{\text{out}}[t] \to u_{\text{in}}[t+1]$ with capacity $\infty$ allow drones to hold position in a zone across turns.
-- **Normal Movement**: For adjacent hubs $u$ and $v$ with cost 1, directed edges $u_{\text{out}}[t] \to v_{\text{in}}[t+1]$ carry capacity $\text{max\_link\_capacity}(u, v)$.
+- **Normal Movement**: For adjacent hubs $u$ and $v$ with cost 1, directed edges $u_{\text{out}}[t] \to v_{\text{in}}[t+1]$ carry capacity `max_link_capacity(u, v)`.
 - **Multi-Turn Transit (Restricted Zones)**: When moving to a restricted zone ($cost = 2$), the movement spans two time steps:
-  $$u_{\text{out}}[t] \xrightarrow{\text{capacity}} \text{\_\_conn\_}u\_v\text{\_\_}[t+1] \xrightarrow{\text{capacity}} v_{\text{in}}[t+2]$$
+  $$u_{\text{out}}[t] \xrightarrow{\text{capacity}} \text{transit}[t+1] \xrightarrow{\text{capacity}} v_{\text{in}}[t+2]$$
   Transit nodes have no temporal waiting edges, strictly preventing drones from hovering indefinitely on the connection.
 
 ### 4. Dinic's Maximum Flow Algorithm
@@ -153,12 +153,13 @@ To incorporate time and capacity constraints simultaneously, the static graph is
 - Uses BFS to construct level graphs and DFS with pointer elimination to push blocking flows along admissible edges.
 
 ### 5. Binary Search on Minimum Turns
-- Rather than sequentially checking $T = 1, 2, 3, \dots$, the solver performs binary search over the turn budget $[1, \text{max\_turns}]$ to pinpoint the optimal minimum turn count $T^*$.
+- Rather than sequentially checking $T = 1, 2, 3, \dots$, the solver performs binary search over the turn budget `[1, max_turns]` (with `max_turns = 100` by default) to pinpoint the optimal minimum turn count $T^*$.
 
 ### 6. Flow Decomposition & Path Extraction
 - Once the minimal turn graph is determined, unit flow paths are iteratively extracted via DFS to reconstruct the exact timestamped itinerary for each individual drone ($D_1, D_2, \dots, D_N$).
 
 ---
+
 
 ## Visual Representation Features (UX)
 
