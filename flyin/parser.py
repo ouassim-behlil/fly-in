@@ -17,6 +17,7 @@ class MapParser:
         self.connections: List[Connection] = []
         self.start_zone: Optional[Zone] = None
         self.end_zone: Optional[Zone] = None
+        self.used_coordinates: Set[Tuple[int, int]] = set()
 
     def parse(self) -> Graph:
         handlers: Dict[str, Callable[[str, int], None]] = {
@@ -27,7 +28,25 @@ class MapParser:
             "connection": self._parse_connection,
         }
 
-        with self.path.open("r", encoding="utf-8", buffering=1 << 16) as f:
+        try:
+            f_obj = self.path.open("r", encoding="utf-8", buffering=1 << 16)
+        except FileNotFoundError:
+            raise ParseError(
+                0,
+                f"File not found: '{self.path}'"
+            )
+        except PermissionError:
+            raise ParseError(
+                0,
+                f"Permission denied: cannot open file '{self.path}'"
+            )
+        except OSError as e:
+            raise ParseError(
+                0,
+                f"Cannot open file '{self.path}': {e}"
+            )
+
+        with f_obj as f:
             for line_number, raw in enumerate(f, start=1):
                 line = raw.partition('#')[0].strip()
 
@@ -158,7 +177,24 @@ class MapParser:
                     "separate bracket groups are not allowed."
                 )
 
+            # Anything after the closing ']' (besides a comment) is invalid
+            after_bracket = line[end + 1:].partition('#')[0].strip()
+            if after_bracket:
+                raise ParseError(
+                    line_number,
+                    f"Unexpected content after metadata brackets: "
+                    f"'{after_bracket}'"
+                )
+
             meta_str = inner_content.strip('[] ')
+            if not meta_str:
+                raise ParseError(
+                    line_number,
+                    "Metadata brackets must not be empty; "
+                    "provide at least one key=value entry."
+                )
+
+            seen_keys: Set[str] = set()
             for element in meta_str.split():
                 key, sep, value = element.partition('=')
                 if not sep or key.strip() != 'max_link_capacity':
@@ -166,6 +202,13 @@ class MapParser:
                         line_number,
                         f"Invalid connection metadata: '{element}'"
                     )
+
+                if key in seen_keys:
+                    raise ParseError(
+                        line_number,
+                        f"Duplicate metadata key '{key}' in connection."
+                    )
+                seen_keys.add(key)
 
                 try:
                     capacity = int(value.strip())
@@ -203,6 +246,12 @@ class MapParser:
                 "do not exist!"
             )
 
+        if zone1 == zone2:
+            raise ParseError(
+                line_number,
+                f"A zone cannot be connected to itself: '{zone1}'"
+            )
+
         if ((zone1, zone2) in self.unique_connections or
                 (zone2, zone1) in self.unique_connections):
             raise ParseError(line_number, "Connection already exists!")
@@ -238,7 +287,23 @@ class MapParser:
                     "separate bracket groups are not allowed."
                 )
 
+            # Anything after the closing ']' (besides a comment) is invalid
+            after_bracket = line[end + 1:].partition('#')[0].strip()
+            if after_bracket:
+                raise ParseError(
+                    line_number,
+                    f"Unexpected content after metadata brackets: "
+                    f"'{after_bracket}'"
+                )
+
             meta_str = inner_content.strip('[] ')
+            if not meta_str:
+                raise ParseError(
+                    line_number,
+                    "Metadata brackets must not be empty; "
+                    "provide at least one key=value entry."
+                )
+
             metadata = self._parse_zone_metadata(meta_str, line_number)
 
             line = line[:start].strip()
@@ -258,10 +323,16 @@ class MapParser:
 
         name, _x, _y = line_split
 
-        if '-' in name or ' ' in name:
+        if '-' in name:
             raise ParseError(
                 line_number,
-                "Zone names cannot contain dashes or spaces!"
+                "Zone names cannot contain the '-' character!"
+            )
+
+        if any(c.isspace() for c in name):
+            raise ParseError(
+                line_number,
+                "Zone names cannot contain whitespace!"
             )
 
         if name in self.zones:
@@ -273,6 +344,14 @@ class MapParser:
             x, y = int(_x), int(_y)
         except ValueError:
             raise ParseError(line_number, "Zone coordinates must be integers!")
+
+        coords = (x, y)
+        if coords in self.used_coordinates:
+            raise ParseError(
+                line_number,
+                f"Coordinates ({x}, {y}) are already used by another zone!"
+            )
+        self.used_coordinates.add(coords)
 
         return Zone(name=name, x=x, y=y, metadata=metadata)
 
@@ -291,6 +370,7 @@ class MapParser:
             'priority': ZoneType.PRIORITY
         }
 
+        seen_keys: Set[str] = set()
         for element in meta_str.split():
             key, sep, value = element.partition('=')
             if not sep:
@@ -298,6 +378,13 @@ class MapParser:
                     line_number,
                     f"Invalid metadata element: '{element}'"
                 )
+
+            if key in seen_keys:
+                raise ParseError(
+                    line_number,
+                    f"Duplicate metadata key '{key}' in zone."
+                )
+            seen_keys.add(key)
 
             if key == 'zone':
                 if value not in zone_type_map:

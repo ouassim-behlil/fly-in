@@ -63,9 +63,19 @@ class TimeExpandedGraph:
         self.nodes: Set[TimeExpandedNode] = {self.source, self.sink}
 
     def add_edge(
-        self, src: TimeExpandedNode, dst: TimeExpandedNode, capacity: int
+        self,
+        src: TimeExpandedNode,
+        dst: TimeExpandedNode,
+        capacity: int,
+        *,
+        priority: bool = False,
     ) -> None:
-        """Add a directed edge with capacity."""
+        """Add a directed edge with capacity.
+
+        When *priority* is True the forward edge is prepended to the
+        source's adjacency list so Dinic's DFS explores it first,
+        giving PRIORITY zones tiebreaker preference at zero extra cost.
+        """
         if src not in self.edges_from:
             self.edges_from[src] = []
         if src not in self.edges_to:
@@ -81,7 +91,10 @@ class TimeExpandedGraph:
         forward.reverse = backward
         backward.reverse = forward
 
-        self.edges_from[src].append(forward)
+        if priority:
+            self.edges_from[src].insert(0, forward)
+        else:
+            self.edges_from[src].append(forward)
         self.edges_from[dst].append(backward)
         self.edges_to[dst].append(forward)
         self.edges_to[src].append(backward)
@@ -100,7 +113,16 @@ class TimeExpandedGraph:
                 in_node = TimeExpandedNode(zone.name, t, True)
                 out_node = TimeExpandedNode(zone.name, t, False)
 
-                self.add_edge(in_node, out_node, zone.metadata.max_drones)
+                # PRIORITY zones are given tiebreaker preference: their
+                # split-edge is prepended so DFS visits them first when
+                # two paths have equal cost.
+                is_priority = zone.metadata.zone_type == ZoneType.PRIORITY
+                self.add_edge(
+                    in_node,
+                    out_node,
+                    zone.metadata.max_drones,
+                    priority=is_priority,
+                )
 
                 if t < T - 1:
                     next_in_node = TimeExpandedNode(zone.name, t + 1, True)
