@@ -48,7 +48,8 @@ class Edge:
 
 
 class TimeExpandedGraph:
-    """Time-expanded graph for T turns with strict multi-turn lockout capacity."""
+    """Time-expanded graph for T turns with strict
+    multi-turn lockout capacity."""
 
     def __init__(self, original_graph: Graph, max_turns: int):
         self.original_graph = original_graph
@@ -147,7 +148,7 @@ class TimeExpandedGraph:
             frw_cost = dst_zone.metadata.cost
             back_cost = src_zone.metadata.cost
 
-            # Forward connection traversal (stepped by cost to prevent overlapping pipeline entries)
+            # Forward connection traversal
             if frw_cost == 1:
                 for t in range(T):
                     if t < T - 1:
@@ -166,7 +167,7 @@ class TimeExpandedGraph:
                         self.add_edge(src_out, transit, conn.max_link_capacity)
                         self.add_edge(transit, dst_in, conn.max_link_capacity)
 
-            # Backward connection traversal (stepped by cost to prevent overlapping pipeline entries)
+            # Backward connection traversal
             if back_cost == 1:
                 for t in range(T):
                     if t < T - 1:
