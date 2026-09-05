@@ -48,7 +48,7 @@ class Edge:
 
 
 class TimeExpandedGraph:
-    """Time-expanded graph for T turns."""
+    """Time-expanded graph for T turns with strict multi-turn lockout capacity."""
 
     def __init__(self, original_graph: Graph, max_turns: int):
         self.original_graph = original_graph
@@ -113,9 +113,7 @@ class TimeExpandedGraph:
                 in_node = TimeExpandedNode(zone.name, t, True)
                 out_node = TimeExpandedNode(zone.name, t, False)
 
-                # PRIORITY zones are given tiebreaker preference: their
-                # split-edge is prepended so DFS visits them first when
-                # two paths have equal cost.
+                # PRIORITY zones are given tiebreaker preference
                 is_priority = zone.metadata.zone_type == ZoneType.PRIORITY
                 self.add_edge(
                     in_node,
@@ -149,14 +147,15 @@ class TimeExpandedGraph:
             frw_cost = dst_zone.metadata.cost
             back_cost = src_zone.metadata.cost
 
-            for t in range(T):
-                # Forward connection traversal
-                if frw_cost == 1:
+            # Forward connection traversal (stepped by cost to prevent overlapping pipeline entries)
+            if frw_cost == 1:
+                for t in range(T):
                     if t < T - 1:
                         src_out = TimeExpandedNode(src, t, False)
                         dst_in = TimeExpandedNode(dst, t + 1, True)
                         self.add_edge(src_out, dst_in, conn.max_link_capacity)
-                elif frw_cost == 2:
+            elif frw_cost == 2:
+                for t in range(0, T, 2):
                     if t + 2 <= T:
                         src_out = TimeExpandedNode(src, t, False)
                         transit = TimeExpandedNode(
@@ -167,13 +166,15 @@ class TimeExpandedGraph:
                         self.add_edge(src_out, transit, conn.max_link_capacity)
                         self.add_edge(transit, dst_in, conn.max_link_capacity)
 
-                # Backward connection traversal
-                if back_cost == 1:
+            # Backward connection traversal (stepped by cost to prevent overlapping pipeline entries)
+            if back_cost == 1:
+                for t in range(T):
                     if t < T - 1:
                         dst_out = TimeExpandedNode(dst, t, False)
                         src_in = TimeExpandedNode(src, t + 1, True)
                         self.add_edge(dst_out, src_in, conn.max_link_capacity)
-                elif back_cost == 2:
+            elif back_cost == 2:
+                for t in range(0, T, 2):
                     if t + 2 <= T:
                         dst_out = TimeExpandedNode(dst, t, False)
                         transit = TimeExpandedNode(
