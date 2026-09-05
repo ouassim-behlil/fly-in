@@ -133,10 +133,6 @@ class MapParser:
 
         self.end_zone = self._parse_zone(value, line_number)
 
-        if self.end_zone.metadata.zone_type == ZoneType.BLOCKED:
-            self.end_zone.metadata.zone_type = ZoneType.NORMAL
-            self.end_zone.metadata.cost = 1
-
         if self.nb_drones is not None:
             self.end_zone.metadata.max_drones = self.nb_drones
         else:
@@ -152,8 +148,19 @@ class MapParser:
         connection = Connection()
         connection.max_link_capacity = 1
 
-        start = line.find('[')
-        end = line.rfind(']')
+        start = -1
+        idx = line.rfind('[')
+        while idx != -1:
+            if idx == 0 or line[idx - 1].isspace():
+                start = idx
+                break
+            idx = line.rfind('[', 0, idx)
+
+        end = -1
+        if start != -1:
+            end = line.rfind(']')
+            if end < start:
+                end = -1
 
         if start != -1 or end != -1:
             if start == -1 or end == -1 or end < start:
@@ -177,7 +184,6 @@ class MapParser:
                     "separate bracket groups are not allowed."
                 )
 
-            # Anything after the closing ']' (besides a comment) is invalid
             after_bracket = line[end + 1:].partition('#')[0].strip()
             if after_bracket:
                 raise ParseError(
@@ -262,8 +268,19 @@ class MapParser:
         self.unique_connections.add((zone1, zone2))
 
     def _parse_zone(self, line: str, line_number: int) -> "Zone":
-        start = line.find('[')
-        end = line.rfind(']')
+        start = -1
+        idx = line.rfind('[')
+        while idx != -1:
+            if idx == 0 or line[idx - 1].isspace():
+                start = idx
+                break
+            idx = line.rfind('[', 0, idx)
+
+        end = -1
+        if start != -1:
+            end = line.rfind(']')
+            if end < start:
+                end = -1
 
         if start != -1 or end != -1:
             if start == -1 or end == -1 or end < start:
@@ -287,7 +304,6 @@ class MapParser:
                     "separate bracket groups are not allowed."
                 )
 
-            # Anything after the closing ']' (besides a comment) is invalid
             after_bracket = line[end + 1:].partition('#')[0].strip()
             if after_bracket:
                 raise ParseError(
@@ -305,7 +321,6 @@ class MapParser:
                 )
 
             metadata = self._parse_zone_metadata(meta_str, line_number)
-
             line = line[:start].strip()
         else:
             metadata = Metadata()
