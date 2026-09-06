@@ -170,10 +170,10 @@ class MapParser:
                 )
 
             meta_raw = line[start: end + 1]
-            if meta_raw.count('[') != meta_raw.count(']'):
+            if meta_raw.count('[') != 1 or meta_raw.count(']') != 1:
                 raise ParseError(
                     line_number,
-                    "Invalid metadata! Unbalanced brackets."
+                    "Invalid metadata! Exactly one pair of brackets is allowed"
                 )
 
             inner_content = line[start + 1: end]
@@ -290,10 +290,10 @@ class MapParser:
                 )
 
             meta_raw = line[start: end + 1]
-            if meta_raw.count('[') != meta_raw.count(']'):
+            if meta_raw.count('[') != 1 or meta_raw.count(']') != 1:
                 raise ParseError(
                     line_number,
-                    "Invalid metadata! Unbalanced brackets."
+                    "Invalid metadata! Exactly one pair of brackets is allowed"
                 )
 
             inner_content = line[start + 1: end]

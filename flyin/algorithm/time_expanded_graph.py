@@ -105,7 +105,7 @@ class TimeExpandedGraph:
 
     def build(self, T: int) -> None:
         """Build time-expanded graph for T turns."""
-        # step 1: add zone split edges and temporal edges
+        # step 1: add zone split edges and temporal edges[cite: 3]
         for t in range(T):
             for zone in self.original_graph.zones:
                 if zone.metadata.zone_type == ZoneType.BLOCKED:
@@ -114,20 +114,17 @@ class TimeExpandedGraph:
                 in_node = TimeExpandedNode(zone.name, t, True)
                 out_node = TimeExpandedNode(zone.name, t, False)
 
-                # PRIORITY zones are given tiebreaker preference
-                is_priority = zone.metadata.zone_type == ZoneType.PRIORITY
                 self.add_edge(
                     in_node,
                     out_node,
                     zone.metadata.max_drones,
-                    priority=is_priority,
                 )
 
                 if t < T - 1:
                     next_in_node = TimeExpandedNode(zone.name, t + 1, True)
                     self.add_edge(out_node, next_in_node, sys.maxsize)
 
-        # step 2: Add connection edges with multi-turn transit nodes
+        # step 2: Add connection edges with multi-turn transit nodes[cite: 3]
         for conn in self.original_graph.connections:
             src, dst = conn.zone1, conn.zone2
             assert src is not None and dst is not None
@@ -149,12 +146,19 @@ class TimeExpandedGraph:
             back_cost = src_zone.metadata.cost
 
             # Forward connection traversal
+            # (prioritize if destination is priority zone)
+            is_dst_priority = dst_zone.metadata.zone_type == ZoneType.PRIORITY
             if frw_cost == 1:
                 for t in range(T):
                     if t < T - 1:
                         src_out = TimeExpandedNode(src, t, False)
                         dst_in = TimeExpandedNode(dst, t + 1, True)
-                        self.add_edge(src_out, dst_in, conn.max_link_capacity)
+                        self.add_edge(
+                            src_out,
+                            dst_in,
+                            conn.max_link_capacity,
+                            priority=is_dst_priority
+                        )
             elif frw_cost == 2:
                 for t in range(0, T, 2):
                     if t + 2 <= T:
@@ -165,15 +169,27 @@ class TimeExpandedGraph:
                         dst_in = TimeExpandedNode(dst, t + 2, True)
 
                         self.add_edge(src_out, transit, conn.max_link_capacity)
-                        self.add_edge(transit, dst_in, conn.max_link_capacity)
+                        self.add_edge(
+                            transit,
+                            dst_in,
+                            conn.max_link_capacity,
+                            priority=is_dst_priority
+                        )
 
             # Backward connection traversal
+            # (prioritize if source is priority zone)
+            is_src_priority = src_zone.metadata.zone_type == ZoneType.PRIORITY
             if back_cost == 1:
                 for t in range(T):
                     if t < T - 1:
                         dst_out = TimeExpandedNode(dst, t, False)
                         src_in = TimeExpandedNode(src, t + 1, True)
-                        self.add_edge(dst_out, src_in, conn.max_link_capacity)
+                        self.add_edge(
+                            dst_out,
+                            src_in,
+                            conn.max_link_capacity,
+                            priority=is_src_priority
+                        )
             elif back_cost == 2:
                 for t in range(0, T, 2):
                     if t + 2 <= T:
@@ -184,9 +200,14 @@ class TimeExpandedGraph:
                         src_in = TimeExpandedNode(src, t + 2, True)
 
                         self.add_edge(dst_out, transit, conn.max_link_capacity)
-                        self.add_edge(transit, src_in, conn.max_link_capacity)
+                        self.add_edge(
+                            transit,
+                            src_in,
+                            conn.max_link_capacity,
+                            priority=is_src_priority
+                        )
 
-        # step 3: Add source -> start_zone and end_zone -> sink
+        # step 3: Add source -> start_zone and end_zone -> sink[cite: 3]
         start_name = self.original_graph.start_zone.name
         end_name = self.original_graph.end_zone.name
         for t in range(T):
