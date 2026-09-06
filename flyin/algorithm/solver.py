@@ -107,7 +107,7 @@ class Solver:
     def can_deliver_all(self, turns: int) -> bool:
         return self.max_deliverable(turns) >= self.graph.nb_drones
 
-    def solve(self, max_turns: int = 100) -> Tuple[int, List[List[Zone]]]:
+    def solve(self, max_turns: int = 10000) -> Tuple[int, List[List[Zone]]]:
         """
         Return the minimum turn count required to route all drones.
 
